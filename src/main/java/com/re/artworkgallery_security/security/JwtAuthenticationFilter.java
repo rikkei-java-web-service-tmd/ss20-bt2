@@ -23,6 +23,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Autowired
     private UserDetailsServiceImpl userDetailsService;
 
+    @Autowired
+    private com.re.artworkgallery_security.repository.TokenSessionRepository tokenSessionRepository;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
@@ -32,14 +35,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String username = jwtUtils.getUserNameFromJwtToken(jwt);
 
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities());
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                
+                // Check if user has any active session
+                UserDetailsImpl userDetailsImpl = (UserDetailsImpl) userDetails;
+                java.util.List<com.re.artworkgallery_security.model.TokenSession> sessions = 
+                        tokenSessionRepository.findByAccountId(userDetailsImpl.getId());
+                
+                boolean hasActiveSession = sessions.stream()
+                        .anyMatch(session -> !session.getIsRevoked());
+                
+                if (hasActiveSession) {
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(
+                                    userDetails,
+                                    null,
+                                    userDetails.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
+
             }
         } catch (Exception e) {
             // log error

@@ -1,0 +1,52 @@
+### Kịch bản 1: Đăng nhập bằng tài khoản ROLE_ADMIN -> Gọi API GET /api/gallery/artworks -> Xác nhận thấy toàn bộ tác phẩm
+POST http://localhost:8080/api/gallery/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+> {%
+    client.global.set("admin_token", response.body.accessToken);
+%}
+
+### Get Artworks as Admin
+GET http://localhost:8080/api/gallery/artworks
+Authorization: Bearer {{admin_token}}
+
+
+### Kịch bản 2: Đăng nhập bằng tài khoản ROLE_ARTIST -> Gọi API GET /api/gallery/artworks -> Xác nhận chỉ thấy tác phẩm public và tác phẩm ẩn của chính mình
+POST http://localhost:8080/api/gallery/auth/login
+Content-Type: application/json
+
+{
+  "username": "artist1",
+  "password": "artist123"
+}
+
+> {%
+    client.global.set("artist1_token", response.body.accessToken);
+%}
+
+### Get Artworks as Artist1
+GET http://localhost:8080/api/gallery/artworks
+Authorization: Bearer {{artist1_token}}
+
+
+### Kịch bản 3: Thử lấy danh sách khi không truyền Access Token (Phải báo lỗi 401)
+GET http://localhost:8080/api/gallery/artworks
+
+
+### Kịch bản 4: Đăng xuất, sau đó dùng Access Token cũ để gọi API lấy danh sách (Phải báo lỗi 401 do token đã bị revoke trong DB)
+### Wait, token validation in Spring Security default stateless implementation doesn't check the DB for revoked state of Access Token by default unless explicitly coded.
+### Actually, the requirement asks for POST /api/gallery/auth/logout to set is_revoked = true for token, and Kịch bản 4 expects 401. 
+### This implies JwtAuthenticationFilter should check if the account's session is revoked, or maybe access tokens are short-lived.
+### I'll add a check in JwtAuthenticationFilter for the revoked status.
+
+POST http://localhost:8080/api/gallery/auth/logout
+Authorization: Bearer {{admin_token}}
+
+### Try Get Artworks again after logout
+GET http://localhost:8080/api/gallery/artworks
+Authorization: Bearer {{admin_token}}
